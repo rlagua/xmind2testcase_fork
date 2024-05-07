@@ -12,7 +12,7 @@ Zentao official document about import CSV testcase file: https://www.zentao.net/
 """
 
 
-def xmind_to_zentao_csv_file(xmind_file):
+def xmind_to_zentao_csv_file(xmind_file, merge=False):
     """Convert XMind file to a zentao csv file"""
     xmind_file = get_absolute_path(xmind_file)
     logging.info('Start converting XMind file(%s) to zentao file...', xmind_file)
@@ -24,11 +24,14 @@ def xmind_to_zentao_csv_file(xmind_file):
         row = gen_a_testcase_row(testcase)
         zentao_testcase_rows.append(row)
 
-    zentao_file = xmind_file[:-6] + '.csv'
+    zentao_file = xmind_file[:-6] + '.data'
     if os.path.exists(zentao_file):
         os.remove(zentao_file)
         # logging.info('The zentao csv file already exists, return it directly: %s', zentao_file)
         # return zentao_file
+
+    if merge:
+        zentao_testcase_rows = merge_testcase_same_name(zentao_testcase_rows=zentao_testcase_rows)
 
     with open(zentao_file, 'w', encoding='utf8') as f:
         writer = csv.writer(f)
@@ -36,6 +39,7 @@ def xmind_to_zentao_csv_file(xmind_file):
         logging.info('Convert XMind file(%s) to a zentao csv file(%s) successfully!', xmind_file, zentao_file)
 
     return zentao_file
+    # return zentao_testcase_rows
 
 
 def gen_a_testcase_row(testcase_dict):
@@ -46,7 +50,7 @@ def gen_a_testcase_row(testcase_dict):
     case_keyword = ''
     case_priority = gen_case_priority(testcase_dict['importance'])
     case_type = gen_case_type(testcase_dict['execution_type'])
-    case_apply_phase = '迭代测试'
+    case_apply_phase = '功能测试阶段'
     row = [case_module, case_title, case_precontion, case_step, case_expected_result, case_keyword, case_priority, case_type, case_apply_phase]
     return row
 
@@ -74,22 +78,77 @@ def gen_case_step_and_expected_result(steps):
 
 
 def gen_case_priority(priority):
-    mapping = {1: '高', 2: '中', 3: '低'}
+    mapping = {1: '1', 2: '2', 3: '3', 4:'4'}
     if priority in mapping.keys():
         return mapping[priority]
     else:
-        return '中'
+        return '3'
 
 
 def gen_case_type(case_type):
-    mapping = {1: '手动', 2: '自动'}
+    mapping = {1: '功能测试', 2: '自动'}
     if case_type in mapping.keys():
         return mapping[case_type]
     else:
-        return '手动'
+        # 修改默认功能测试
+        return '功能测试'
 
+def add_team_num(num, row):
+    team_split = row[3].split('\n')[:-1]
+    team_add_num = [num + item for item in team_split]
+    team = '\n'.join(team_add_num)
+    row[3] = team
+    team_split = row[4].split('\n')[:-1]
+    team_add_num = [num + item for item in team_split]
+    team = '\n'.join(team_add_num)
+    row[4] = team
+
+def merge_testcase_same_name(zentao_testcase_rows):
+    zentao_csv_rows = zentao_testcase_rows[1:]
+    zentao_csv = []
+    for row in zentao_csv_rows:
+        # 使用" > "分割第二个变量
+        split_values = row[1].split(" > ")
+        if len(split_values) < 2:
+            split_values.append(split_values[0])
+        if len(split_values) > 2:
+            split_values[1] = ''.join(split_values[1:])
+        # 将分割的第一个值添加到第三和第四个值的开头
+        row[1] = split_values[0]
+        row[3] = split_values[1] + '\n' + row[3]
+        row[4] = split_values[1] + '\n' + row[4]
+        # 打印处理后的行
+        # print(row)
+        zentao_csv.append(row)
+
+    # 创建一个字典用于存储合并后的行
+    merged_rows = {}
+    num_rows = {}
+    # 遍历列表中的每一行
+    for row in zentao_csv:
+        key = row[1]  # 使用第二个变量作为字典的键
+        if key in merged_rows:
+            # 如果字典中已经存在相同的键，则将第三、第四元素相加
+            num_rows[key] += 1
+            num = str(num_rows[key]) + '.'
+            add_team_num(num, row)
+            merged_rows[key][4] += '\n'
+            merged_rows[key][3] += '\n'
+            merged_rows[key][4] += row[4]
+            merged_rows[key][3] += row[3]
+        else:
+            # 如果字典中不存在相同的键，则将当前行添加到字典中
+            add_team_num('1.', row)
+            merged_rows[key] = row
+            num_rows[key] = 1
+
+    # 将字典转换为列表
+    merged_rows_list = list(merged_rows.values())
+    merged_rows_list.insert(0,zentao_testcase_rows[0])
+    
+    return merged_rows_list
 
 if __name__ == '__main__':
-    xmind_file = '../docs/zentao_testcase_template.xmind'
+    xmind_file = r'E:\A_CODE\python\Maintain\xmind2testcase_fork\docs\HOME2.xmind'
     zentao_csv_file = xmind_to_zentao_csv_file(xmind_file)
     print('Conver the xmind file to a zentao csv file succssfully: %s', zentao_csv_file)
